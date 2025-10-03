@@ -1,0 +1,23 @@
+{
+  "name": "gazefilter-data-extractor",
+  "version": "1.0.0",
+  "description": "JavaScript program to extract gaze tracking data",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server . -p 3000 -c-1",
+    "start:https": "node https-server.js",
+    "dev": "npx live-server --port=3000"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1",
+    "live-server": "^1.2.2",
+    "selfsigned": "^2.4.1"
+  },
+  "keywords": [
+    "gaze-tracking",
+    "eye-tracking",
+    "javascript"
+  ],
+  "author": "",
+  "license": "MIT"
+}
