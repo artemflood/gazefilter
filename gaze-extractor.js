@@ -2,11 +2,11 @@ class GazeDataExtractor {
     constructor() {
         this.isTracking = false;
         this.gazeData = [];
-        this.allGazeData = []; // Зберігаємо всі дані з GazeFilter
+        this.allGazeData = []; 
         this.startTime = null;
         this.sessionTimeInterval = null;
         this.gazePoint = null;
-        this.port = null; // Channel port для GazeFilter
+        this.port = null; 
         
         this.initializeElements();
         this.setupEventListeners();
@@ -19,6 +19,7 @@ class GazeDataExtractor {
         this.clearBtn = document.getElementById('clearData');
         this.exportBtn = document.getElementById('exportData');
         this.exportGazeFilterBtn = document.getElementById('exportGazeFilter');
+        this.showStatsBtn = document.getElementById('showStats');
         this.openGazeFilterBtn = document.getElementById('openGazeFilter');
         
         this.status = document.getElementById('status');
@@ -38,9 +39,9 @@ class GazeDataExtractor {
         this.clearBtn.addEventListener('click', () => this.clearData());
         this.exportBtn.addEventListener('click', () => this.exportData());
         this.exportGazeFilterBtn.addEventListener('click', () => this.downloadGazeFilterData());
+        this.showStatsBtn.addEventListener('click', () => this.showStats());
         this.openGazeFilterBtn.addEventListener('click', () => this.openGazeFilter());
         
-        // Обробка повідомлень від GazeFilter iframe
         window.addEventListener('message', (event) => {
             if (event.origin === 'https://gazefilter.app') {
                 this.handleGazeFilterMessage(event.data);
@@ -49,7 +50,6 @@ class GazeDataExtractor {
     }
     
     setupGazeFilterListener() {
-        // Налаштовуємо слухач повідомлень від GazeFilter
         window.addEventListener('message', (event) => {
             if (event.origin !== 'https://gazefilter.app') return;
 
@@ -65,11 +65,11 @@ class GazeDataExtractor {
     handleGazeFilterMessage(event) {
         const data = event.data;
 
+        // Зберігаємо ВСІ повідомлення від GazeFilter
+        this.allGazeData.push(data);
+        
         switch (data.type) {
             case 'capture':
-                // Зберігаємо всі дані з GazeFilter
-                this.allGazeData.push(data);
-                
                 if (this.isTracking) {
                     this.processGazeData(data.x, data.y, data.confidence || 85);
                 }
@@ -84,6 +84,21 @@ class GazeDataExtractor {
                 console.log('GazeFilter відключено від камери');
                 this.logMessage('GazeFilter відключено від камери');
                 break;
+                
+            case 'calibration':
+                console.log('Калібровка GazeFilter:', data);
+                this.logMessage(`Калібровка: ${JSON.stringify(data)}`);
+                break;
+                
+            case 'error':
+                console.error('Помилка GazeFilter:', data);
+                this.logMessage(`Помилка: ${data.message || JSON.stringify(data)}`);
+                break;
+                
+            default:
+                console.log('Невідомий тип повідомлення GazeFilter:', data);
+                this.logMessage(`Невідомий тип ${data.type}: ${JSON.stringify(data)}`);
+                break;
         }
     }
     
@@ -91,7 +106,6 @@ class GazeDataExtractor {
         try {
             this.status.textContent = 'Ініціалізація відстеження погляду...';
             
-            // Спробуємо використати WebGazer як резервний варіант
             if (typeof webgazer !== 'undefined') {
                 await this.initializeWebGazer();
             }
@@ -123,7 +137,7 @@ class GazeDataExtractor {
             try {
                 webgazer.setGazeListener((data, elapsedTime) => {
                     if (data && this.isTracking) {
-                        this.processGazeData(data.x, data.y, 85); // WebGazer не надає точність
+                        this.processGazeData(data.x, data.y, 85); 
                     }
                 }).begin().then(() => {
                     console.log('WebGazer ініціалізовано');
@@ -159,8 +173,7 @@ class GazeDataExtractor {
         const gazePoint = { x, y, accuracy, timestamp };
         
         this.gazeData.push(gazePoint);
-        
-        // Оновлюємо UI
+
         this.currentCoords.innerHTML = `
             X: ${Math.round(x)}<br>
             Y: ${Math.round(y)}
@@ -170,14 +183,11 @@ class GazeDataExtractor {
         this.totalPoints.textContent = this.gazeData.length;
         this.gazeFilterPoints.textContent = this.allGazeData.length;
         
-        // Розраховуємо середню точність
         const avgAcc = this.gazeData.reduce((sum, point) => sum + point.accuracy, 0) / this.gazeData.length;
         this.avgAccuracy.textContent = Math.round(avgAcc);
         
-        // Оновлюємо позицію gaze point
         this.updateGazePoint(x, y);
         
-        // Додаємо до логу кожні 10 точок
         if (this.gazeData.length % 10 === 0) {
             this.logMessage(`Точка ${this.gazeData.length}: (${Math.round(x)}, ${Math.round(y)}) - ${Math.round(accuracy)}%`);
         }
@@ -230,7 +240,6 @@ class GazeDataExtractor {
         this.dataLog.appendChild(logEntry);
         this.dataLog.scrollTop = this.dataLog.scrollHeight;
         
-        // Обмежуємо кількість записів у лозі
         if (this.dataLog.children.length > 50) {
             this.dataLog.removeChild(this.dataLog.firstChild);
         }
@@ -278,8 +287,7 @@ class GazeDataExtractor {
         
         this.logMessage(`Експортовано ${this.allGazeData.length} точок GazeFilter та ${this.gazeData.length} точок WebGazer`);
     }
-    
-    // Додаткова функція для завантаження тільки GazeFilter даних
+
     downloadGazeFilterData() {
         if (this.allGazeData.length === 0) {
             alert('Немає даних GazeFilter для експорту');
@@ -291,18 +299,63 @@ class GazeDataExtractor {
         
         const link = document.createElement('a');
         link.href = URL.createObjectURL(dataBlob);
-        link.download = `gazefilter-raw-data-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+        link.download = `gazefilter-all-data-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
         link.click();
         
-        this.logMessage(`Експортовано ${this.allGazeData.length} сирих точок GazeFilter`);
+        this.logMessage(`Експортовано ${this.allGazeData.length} повідомлень GazeFilter`);
+    }
+    
+    // Функція для отримання даних за типом
+    getGazeFilterDataByType(type) {
+        return this.allGazeData.filter(data => data.type === type);
+    }
+    
+    // Функція для отримання статистики по типах
+    getGazeFilterStats() {
+        const stats = {};
+        this.allGazeData.forEach(data => {
+            stats[data.type] = (stats[data.type] || 0) + 1;
+        });
+        return stats;
+    }
+    
+    showStats() {
+        if (this.allGazeData.length === 0) {
+            alert('Немає даних для показу статистики');
+            return;
+        }
+        
+        const stats = this.getGazeFilterStats();
+        let statsText = '📊 Статистика GazeFilter:\n\n';
+        
+        Object.entries(stats).forEach(([type, count]) => {
+            statsText += `${type}: ${count} повідомлень\n`;
+        });
+        
+        statsText += `\nЗагалом: ${this.allGazeData.length} повідомлень`;
+        
+        // Показуємо приклади кожного типу
+        statsText += '\n\n📋 Приклади даних:\n';
+        Object.keys(stats).forEach(type => {
+            const example = this.allGazeData.find(data => data.type === type);
+            if (example) {
+                statsText += `\n${type}:\n${JSON.stringify(example, null, 2)}\n`;
+            }
+        });
+        
+        console.log(statsText);
+        this.logMessage(`Статистика: ${Object.keys(stats).length} типів повідомлень`);
+        
+        // Показуємо в alert для швидкого перегляду
+        alert(statsText);
     }
     
     openGazeFilter() {
-        // Відкриваємо GazeFilter в новому вікні для кращої інтеграції
+      
         const newWindow = window.open('https://gazefilter.app/', 'gazefilter', 'width=1200,height=800');
         
         if (newWindow) {
-            // Налаштовуємо комунікацію з новим вікном
+          
             const messageListener = (event) => {
                 if (event.origin === 'https://gazefilter.app') {
                     this.handleGazeFilterMessage(event.data);
@@ -311,7 +364,7 @@ class GazeDataExtractor {
             
             window.addEventListener('message', messageListener);
             
-            // Відправляємо запити на дані до нового вікна
+           
             const requestInterval = setInterval(() => {
                 if (newWindow.closed) {
                     clearInterval(requestInterval);
@@ -324,7 +377,7 @@ class GazeDataExtractor {
                         type: 'REQUEST_GAZE_DATA'
                     }, 'https://gazefilter.app');
                 } catch (e) {
-                    // Ігноруємо помилки
+                 
                 }
             }, 100);
             
@@ -335,11 +388,11 @@ class GazeDataExtractor {
     }
 }
 
-// Ініціалізація після завантаження сторінки
+
 document.addEventListener('DOMContentLoaded', () => {
     const extractor = new GazeDataExtractor();
     
-    // Додаткові утиліти для аналізу даних
+   
     window.gazeExtractor = extractor;
     
     console.log('GazeFilter Data Extractor готовий до роботи!');
@@ -348,6 +401,9 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('- window.gazeExtractor.stopTracking()');
     console.log('- window.gazeExtractor.exportData()');
     console.log('- window.gazeExtractor.downloadGazeFilterData()');
+    console.log('- window.gazeExtractor.showStats()');
     console.log('- window.gazeExtractor.clearData()');
-    console.log('- window.gazeExtractor.allGazeData (масив всіх даних GazeFilter)');
+    console.log('- window.gazeExtractor.allGazeData (масив ВСІХ даних GazeFilter)');
+    console.log('- window.gazeExtractor.getGazeFilterDataByType(type)');
+    console.log('- window.gazeExtractor.getGazeFilterStats()');
 });
