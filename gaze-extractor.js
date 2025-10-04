@@ -2,13 +2,15 @@ class GazeDataExtractor {
     constructor() {
         this.isTracking = false;
         this.gazeData = [];
+        this.allGazeData = []; // Зберігаємо всі дані з GazeFilter
         this.startTime = null;
         this.sessionTimeInterval = null;
         this.gazePoint = null;
+        this.port = null; // Channel port для GazeFilter
         
         this.initializeElements();
         this.setupEventListeners();
-        this.setupPostMessageListener();
+        this.setupGazeFilterListener();
     }
     
     initializeElements() {
@@ -16,12 +18,14 @@ class GazeDataExtractor {
         this.stopBtn = document.getElementById('stopTracking');
         this.clearBtn = document.getElementById('clearData');
         this.exportBtn = document.getElementById('exportData');
+        this.exportGazeFilterBtn = document.getElementById('exportGazeFilter');
         this.openGazeFilterBtn = document.getElementById('openGazeFilter');
         
         this.status = document.getElementById('status');
         this.currentCoords = document.getElementById('currentCoords');
         this.accuracy = document.getElementById('accuracy');
         this.totalPoints = document.getElementById('totalPoints');
+        this.gazeFilterPoints = document.getElementById('gazeFilterPoints');
         this.avgAccuracy = document.getElementById('avgAccuracy');
         this.sessionTime = document.getElementById('sessionTime');
         this.dataLog = document.getElementById('dataLog');
@@ -33,6 +37,7 @@ class GazeDataExtractor {
         this.stopBtn.addEventListener('click', () => this.stopTracking());
         this.clearBtn.addEventListener('click', () => this.clearData());
         this.exportBtn.addEventListener('click', () => this.exportData());
+        this.exportGazeFilterBtn.addEventListener('click', () => this.downloadGazeFilterData());
         this.openGazeFilterBtn.addEventListener('click', () => this.openGazeFilter());
         
         // Обробка повідомлень від GazeFilter iframe
@@ -43,24 +48,42 @@ class GazeDataExtractor {
         });
     }
     
-    setupPostMessageListener() {
-        // Відправляємо запит на отримання даних до GazeFilter
-        setInterval(() => {
-            if (this.isTracking && this.gazefilterFrame.contentWindow) {
-                try {
-                    this.gazefilterFrame.contentWindow.postMessage({
-                        type: 'REQUEST_GAZE_DATA'
-                    }, 'https://gazefilter.app');
-                } catch (e) {
-                    // Ігноруємо помилки CORS
-                }
+    setupGazeFilterListener() {
+        // Налаштовуємо слухач повідомлень від GazeFilter
+        window.addEventListener('message', (event) => {
+            if (event.origin !== 'https://gazefilter.app') return;
+
+            if (event.data.type === 'channel') {
+                if (this.port !== null) this.port.close();
+                this.port = event.ports[0];
+                this.port.onmessage = (msg) => this.handleGazeFilterMessage(msg);
+                this.logMessage('Канал GazeFilter встановлено');
             }
-        }, 100); // Запитуємо дані кожні 100мс
+        });
     }
     
-    handleGazeFilterMessage(data) {
-        if (data.type === 'GAZE_DATA' && this.isTracking) {
-            this.processGazeData(data.x, data.y, data.accuracy);
+    handleGazeFilterMessage(event) {
+        const data = event.data;
+
+        switch (data.type) {
+            case 'capture':
+                // Зберігаємо всі дані з GazeFilter
+                this.allGazeData.push(data);
+                
+                if (this.isTracking) {
+                    this.processGazeData(data.x, data.y, data.confidence || 85);
+                }
+                break;
+
+            case 'connect':
+                console.log('GazeFilter підключено:', data.deviceLabel);
+                this.logMessage(`GazeFilter підключено: ${data.deviceLabel}`);
+                break;
+
+            case 'dispose':
+                console.log('GazeFilter відключено від камери');
+                this.logMessage('GazeFilter відключено від камери');
+                break;
         }
     }
     
@@ -145,6 +168,7 @@ class GazeDataExtractor {
         
         this.accuracy.textContent = Math.round(accuracy);
         this.totalPoints.textContent = this.gazeData.length;
+        this.gazeFilterPoints.textContent = this.allGazeData.length;
         
         // Розраховуємо середню точність
         const avgAcc = this.gazeData.reduce((sum, point) => sum + point.accuracy, 0) / this.gazeData.length;
@@ -214,17 +238,19 @@ class GazeDataExtractor {
     
     clearData() {
         this.gazeData = [];
+        this.allGazeData = [];
         this.currentCoords.innerHTML = 'X: --<br>Y: --';
         this.accuracy.textContent = '--';
         this.totalPoints.textContent = '0';
+        this.gazeFilterPoints.textContent = '0';
         this.avgAccuracy.textContent = '0';
         this.dataLog.innerHTML = '';
         
-        this.logMessage('Дані очищено');
+        this.logMessage('Всі дані очищено');
     }
     
     exportData() {
-        if (this.gazeData.length === 0) {
+        if (this.allGazeData.length === 0 && this.gazeData.length === 0) {
             alert('Немає даних для експорту');
             return;
         }
@@ -233,10 +259,13 @@ class GazeDataExtractor {
             sessionInfo: {
                 startTime: this.startTime,
                 endTime: new Date(),
-                totalPoints: this.gazeData.length,
-                averageAccuracy: this.gazeData.reduce((sum, point) => sum + point.accuracy, 0) / this.gazeData.length
+                totalGazeFilterPoints: this.allGazeData.length,
+                totalWebGazerPoints: this.gazeData.length,
+                averageAccuracy: this.gazeData.length > 0 ? 
+                    this.gazeData.reduce((sum, point) => sum + point.accuracy, 0) / this.gazeData.length : 0
             },
-            gazeData: this.gazeData
+            gazeFilterData: this.allGazeData,
+            webGazerData: this.gazeData
         };
         
         const dataStr = JSON.stringify(exportData, null, 2);
@@ -247,7 +276,25 @@ class GazeDataExtractor {
         link.download = `gaze-data-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
         link.click();
         
-        this.logMessage(`Експортовано ${this.gazeData.length} точок`);
+        this.logMessage(`Експортовано ${this.allGazeData.length} точок GazeFilter та ${this.gazeData.length} точок WebGazer`);
+    }
+    
+    // Додаткова функція для завантаження тільки GazeFilter даних
+    downloadGazeFilterData() {
+        if (this.allGazeData.length === 0) {
+            alert('Немає даних GazeFilter для експорту');
+            return;
+        }
+        
+        const dataStr = JSON.stringify(this.allGazeData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(dataBlob);
+        link.download = `gazefilter-raw-data-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+        link.click();
+        
+        this.logMessage(`Експортовано ${this.allGazeData.length} сирих точок GazeFilter`);
     }
     
     openGazeFilter() {
@@ -296,5 +343,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.gazeExtractor = extractor;
     
     console.log('GazeFilter Data Extractor готовий до роботи!');
-    console.log('Доступні методи: window.gazeExtractor.startTracking(), stopTracking(), exportData()');
+    console.log('Доступні методи:');
+    console.log('- window.gazeExtractor.startTracking()');
+    console.log('- window.gazeExtractor.stopTracking()');
+    console.log('- window.gazeExtractor.exportData()');
+    console.log('- window.gazeExtractor.downloadGazeFilterData()');
+    console.log('- window.gazeExtractor.clearData()');
+    console.log('- window.gazeExtractor.allGazeData (масив всіх даних GazeFilter)');
 });

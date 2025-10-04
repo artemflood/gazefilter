@@ -165,7 +165,8 @@
             <button id="startTracking">Почати відстеження</button>
             <button id="stopTracking" disabled>Зупинити відстеження</button>
             <button id="clearData">Очистити дані</button>
-            <button id="exportData">Експорт даних</button>
+            <button id="exportData">Експорт всіх даних</button>
+            <button id="exportGazeFilter">Експорт GazeFilter</button>
             <button id="openGazeFilter">Відкрити GazeFilter</button>
         </div>
         
@@ -188,7 +189,8 @@
             <div class="data-panel">
                 <h3>📊 Статистика</h3>
                 <div class="coordinates">
-                    Загальна кількість точок: <span id="totalPoints">0</span><br>
+                    GazeFilter точки: <span id="gazeFilterPoints">0</span><br>
+                    WebGazer точки: <span id="totalPoints">0</span><br>
                     Середня точність: <span id="avgAccuracy">0</span>%<br>
                     Час сесії: <span id="sessionTime">00:00</span>
                 </div>
@@ -201,7 +203,10 @@
         </div>
         
         <div class="iframe-container">
-            <iframe id="gazefilterFrame" src="https://gazefilter.app/" title="GazeFilter"></iframe>
+            <iframe id="gazefilterFrame" src="https://gazefilter.app/" 
+                    width="100%" height="600px" 
+                    allowfullscreen allow="camera" 
+                    title="GazeFilter"></iframe>
         </div>
     </div>
 
